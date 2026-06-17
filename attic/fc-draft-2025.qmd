@@ -1,0 +1,58 @@
+Famine [,Gaza] and data science: can we do better?
+
+### Introduction
+
+Israel's ongoing and past campaigns in the Gaza Strip have consistently instrumentalised civilian food supplies CITE.
+
+With the exception of Somalia, scientific evidence seems to have played little role in decision-making during past food insecurity crises CITE.
+In Gaza, successive Integrated Phase Classification (IPC) reports, culminating in projections of famine in parts of the Strip CITE, have however received intense media coverage, and may, behind the scenes, have spurred beneficial levels of diplomatic pressure.
+While the IPC synthesises different evidence streams,
+
+[…]
+
+An example: monitoring adult weight
+
+In August, as current famine conditions were precipitating and humanitarian workers in the Strip began themselves to report running out of food, we initiated a project to remotely monitor weight among United Nations Relief and Works Agency for Palestinian Refugees in the Near East (UNRWA).
+The project relied on entirely anonymous, opt-in participation by individual staff, with light data collection and automation to update analysis and visualisations as self-readings came in.
+
+### Background
+
+The project aims to inform humanitarian decision-making, advocacy and diplomatic action to improve the lives of the affected population.
+In this study we are monitoring nutritional status by tracking changes in weight and BMI.
+This information system is set up by organisations providing humanitarian services inside the Gaza Strip, with the technical and scientific support of the London School of Hygiene and Tropical Medicine (LSHTM).
+All participation from those providing data, resources, support, and analysis, is entirely voluntary.
+
+We recognise that the sub-population of humanitarian staff may not be representative of the overall population (and may in fact have relatively higher socio-economic status).
+However, this system is intended to track the evolution of nutritional status within a well-defined and accessible group inside Gaza.
+We thereby offer additional evidence for nutritional and food insecurity monitoring.
+
+Our specific objectives are to:
+
+1. Estimate average weight and body-mass index (BMI) change since pre-war (7 October 2023) levels;
+2. Monitor the relative and absolute evolution of weight and BMI over time;
+3. Describe differences in weight and BMI change by sex, age, governorate of residence, professional role and number of children dependants.
+
+Find out more about the project and how it works in the [study protocol](./protocol).
+
+### Participation
+
+### Results
+
+Limited data so far demonstrate the extent to which even a relatively privileged stratum of Gaza's society have shed weight relative to pre-war levels (Figure).
+
+[TABLE 1 HERE: sex, age, governorate, role, n dependent children, time of 1st wt measurement, n repeat observations]
+
+Table 1.
+Characteristics of a self-selected sample of UNRWA staff in Gaza who provided at least one weight measurement (n = XXX).
+
+[FIGURE 1 HERE]
+
+Figure 1.
+Mean percent reduction relative to pre-war in weight and body-mass index at the time of first weight measurement among a self-selected sample of UNRWA staff in Gaza (n = XXX), by participant characteristic.
+
+Statistical associations?
+Model?
+
+### Conclusions
+
+[…]

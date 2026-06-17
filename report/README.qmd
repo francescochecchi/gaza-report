@@ -1,0 +1,202 @@
+---
+title: "Reporting"
+format: gfm
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+The below reports data quality and outcomes.
+See [manuscript.qmd](/report/manuscript.qmd) for draft text (or render to markdown: `quarto::quarto_render(here::here("report", "manuscript.qmd"))`).
+
+```{r}
+#| label: setup
+
+library(here)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+library(scales)
+library(forcats)
+library(lubridate)
+library(viridis)
+library(plotly)
+
+data_processed <- read_csv(here("data", "processed", "participants.csv"))
+participants <- data_processed |>
+  filter(record_remove == "include", !is.na(weight))
+exclusions <- read_csv(here("data", "processed", "data-quality.csv"))
+raw_total   <- sum(exclusions$n_records)
+final_inc   <- exclusions |> filter(record_remove == "include")
+n_included_records      <- final_inc$n_records
+n_included_participants <- final_inc$n_participants
+```
+
+### Data processing
+
+- Weight data come from `r raw_total` raw records across two ODK survey forms
+  - `form1`: baseline enrolment record with all characteristics
+  - `form2`: follow-up (date, weight measurement only)
+- `R/clean.R` combines both forms into a single long dataset, `data/processed/participants.csv`
+- All collected records are included in the clean csv, including invalid records or implausible values
+  - Records are assessed against each exclusion criterion in turn, as below
+  - Reasons for exclusion are flagged in the field `record_remove`
+  - Records passing all criteria are labelled `include`
+
+#### Exclusions
+
+```{r}
+#| label: exclusion-table
+
+exclusions |>
+  transmute(
+    `Record processing`   = reason,
+    `Label`            = record_remove,
+    `Records`          = n_records,
+    `Participants`     = n_participants,
+    `Records remaining` = n_remaining,
+    `Participants remaining` = n_participants_remaining
+  ) |>
+  kable()
+```
+
+Note around 200 records in `form2` couldn't be matched to any participant ID in `form1` (flagged as `invalid_no_baseline`).
+As a result these records have no pre-war weight, height, or demographics.
+
+- These might be participants who only ever entered data to the follow-up form
+- Or it might be participants who enrolled at baseline but used a different ID combination to enter the follow up form
+- The follow-up form has no other identifiers, so no obvious way to identify this
+
+### Data description
+
+```{r}
+#| label: plot-setup
+
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+
+bmi_levels <- c("Underweight", "Normal", "Overweight", "Obese")
+bmi_palette <- setNames(viridis(length(bmi_levels), direction = -1), bmi_levels)
+age_levels <- c("Age under 30", "Age 30-45", "Age over 45")
+
+# derive follow-up flag, ordered age
+included <- participants |>
+  add_count(id, name = "n_records") |>
+  mutate(
+    age = factor(age, levels = age_levels),
+    has_followup = n_records >= 2
+  )
+
+# baseline characteristics
+baseline <- included |> filter(record_number == 1)
+```
+
+#### Participant characteristics
+
+```{r}
+#| label: tbl-table1
+#| tbl-cap: "Characteristics of participants at study entry, overall and by whether they later contributed follow-up measurements"
+
+library(gtsummary)
+
+baseline |>
+  mutate(group = if_else(has_followup, "Contributed follow-up", "Baseline only")) |>
+  select(group,
+         `BMI at entry (kg/m2), median [IQR]` = bmi_entry,
+         Sex                    = sex,
+         `Age group`            = age,
+         Governorate            = governorate,
+         Role                   = role,
+         Organisation           = organisation) |>
+  tbl_summary(
+    by = group,
+    type = all_continuous() ~ "continuous",
+    statistic = list(all_continuous()  ~ "{median} [{p25}-{p75}]",
+                     all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 1,
+    missing_text = "(Missing)"
+  ) |>
+  add_overall() |>
+  as_kable()
+```
+
+```{r}
+#| label: fig-participation-over-time
+#| fig-cap: "Weekly reported weight measurements, by new participants (baseline records) and the returning cohort (follow-up records)."
+
+participation_weekly <- included |>
+  mutate(
+    week = floor_date(as.Date(record_date), "week"),
+    source = if_else(record_number == 1, "New participant", "Follow-up") |>
+      factor(levels = c("Follow-up", "New participant"))
+  ) |>
+  count(week, source, name = "n_measurements")
+
+plot <- ggplot(participation_weekly, aes(x = week, y = n_measurements, fill = source)) +
+  geom_col(width = 6) +
+  scale_fill_viridis_d(direction = -1, name = NULL) +
+  labs(x = NULL, y = "Reported measurements per week")
+plot
+```
+
+#### Participant outcomes
+
+##### Weight pre-war to study entry
+
+```{r}
+#| label: fig-prewar-pct-change
+#| fig-cap: "Participant weight change from pre-war to study entry."
+
+plot <- baseline |>
+  filter(!is.na(weight_prewar), !is.na(weight_entry)) |>
+  mutate(pct_change = (weight_entry - weight_prewar) / weight_prewar * 100) |>
+  ggplot(aes(x = pct_change)) +
+  geom_histogram(binwidth = 1) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  scale_fill_viridis() +
+  labs(x = "Weight change pre-war to study entry (% kg)", y = "Participants")
+plot
+```
+
+```{r}
+#| label: fig-age-sex-pyramid
+#| fig-cap: "Age-sex distribution by BMI category, pre-war and at study entry."
+
+plot <- baseline |>
+  filter(sex %in% c("Male", "Female"), !is.na(age)) |>
+  select(id, sex, age, `Pre-war` = bmi_category_prewar, `Study entry` = bmi_category) |>
+  pivot_longer(c(`Pre-war`, `Study entry`),
+               names_to = "period", values_to = "bmi_cat") |>
+  filter(!is.na(bmi_cat)) |>
+  mutate(period  = factor(period, levels = c("Pre-war", "Study entry")),
+         bmi_cat = factor(bmi_cat, levels = bmi_levels)) |>
+  count(period, sex, age, bmi_cat) |>
+  mutate(n_signed = if_else(sex == "Male", -n, n)) |>
+  ggplot(aes(x = n_signed, y = age, fill = bmi_cat)) +
+  geom_col() +
+  geom_vline(xintercept = 0, colour = "#01454f", linewidth = 0.3) +
+  scale_x_continuous(labels = abs) +
+  scale_fill_manual(values = bmi_palette, name = "BMI category") +
+  facet_wrap(~period) +
+  labs(x = "Participants  (Male ← | → Female)", y = NULL)
+plot
+```
+
+##### Study entry through follow-up
+
+```{r}
+#| label: fig-weight-trajectories-calendar
+#| fig-cap: "Individual trajectories by calendar date among those with any recorded follow-up"
+
+plot <- included |>
+  filter(has_followup) |>
+  ggplot(aes(x = record_date, y = bmi)) +
+  geom_line(aes(group = id), alpha = 0.3, colour = "#01454f") +
+  geom_point(alpha = 0.3, size = 1, colour = "#01454f") +
+  geom_smooth(method = "loess", se = TRUE,
+              colour = "#ffa600", fill = "#ffa600", alpha = 0.15) +
+  labs(x = "Date of measurement", y = "BMI")
+plot
+```
