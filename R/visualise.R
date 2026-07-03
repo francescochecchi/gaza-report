@@ -8,10 +8,8 @@
 # -----------------------------------------------------------------------------
 
 set.seed(20260612)
-pacman::p_load(flextable, ggpubr, ggplot2, here, scales, tidyverse, viridis)
-
-# Colour-blind palette for graphing
-palette_gen <- viridis(16)
+pacman::p_load(caret, flextable, gbm, ggpubr, ggplot2, here, mgcv, scales, 
+  tidyverse, viridis)
 
 # Read in processed data
 data_processed <- read.csv(here::here("data", "processed", "participants.csv"))
@@ -54,12 +52,24 @@ theme_set(lshtm_theme())
 
 lshtm_palette <- list(
   bmi_categories = c(
-    "Obese" = "#01454f",
-    "Overweight" = "#007457",
-    "Normal" = "#709b28",
-    "Underweight" = "#ffa600"),
+    "obese (>= 30.0)" = "#01454f",
+    "overweight (25.0 to 29.9)" = "#007457",
+    "normal (18.5 to 24.9)" = "#709b28",
+    "underweight (< 18.5)" = "#ffa600"),
+  period = c(
+    "Aug-Sep 2025" = "#007457",
+    "Oct-Nov 2025" = "#709b28",
+    "Overall" = "#01454f"
+    ),
+  record_number_cat = c(
+    "first" = "#709b28",
+    "second" = "#ffa600",
+    "third or more" = "#01454f"
+  ),
   lshtm_generic = "#01454f"
 )
+
+other_palette <- c("#007457", "#ffa600", "#709b28", "#01454f")
 
 
 
@@ -216,7 +226,7 @@ flextable::save_as_docx(x, path = here("report", "tab1.docx"))
 
 
 # -----------------------------------------------------------------------------
-# Visualise weight and BMI change from pre-war to first observation
+# Visualise weight change from pre-war to first observation
 # -----------------------------------------------------------------------------
 
 # Data for this plot
@@ -242,7 +252,7 @@ names(vars) <- c("age", "sex",
   "governorate of residence", "professional role", 
   "number of dependent children", "living with a chronic condition")
 
-# Produce boxplots for each variable, by period and overall
+# Produce violin plots for each variable, by period and overall
 for (i in vars) {
   
   # data for this plot
@@ -267,9 +277,7 @@ for (i in vars) {
       df_i <- df_i[-x, ]
     }
   }
-  # labs <- labs[which(labs$var_i %in% unique(df_i$var_i) &
-  #     labs$period %in% unique(df_i$period)), ]
-  
+ 
   # plot
   pl <- ggplot(data = df_i, aes(y = weight_change, x = period, 
     colour = period, fill = period)) +
@@ -278,8 +286,9 @@ for (i in vars) {
     scale_y_continuous("percent weight change", labels = percent,
       limits = c(-0.52, 0.32), breaks = seq(-0.50, 0.30, 0.10)) +
     scale_x_discrete("period") +
-    scale_colour_manual("period", values = c("#007457", "#709b28", "#01454f")) +
-    scale_fill_manual("period", values = c("#007457", "#709b28", "#01454f")) +
+    lshtm_theme() +
+    scale_colour_manual("period", values = lshtm_palette$period) +
+    scale_fill_manual("period", values = lshtm_palette$period) +
     geom_hline(yintercept = 0, colour = "grey70", linetype = "21") +
     facet_grid(.~var_i) +
     geom_text(data = labs, aes(y = weight_change, x = period, label = n),
@@ -297,19 +306,448 @@ x <- x[x!= "pl_combi"]
 pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)), 
   ncol = 2, nrow = 3, common.legend = T, align = "v", legend = "bottom",
   hjust = 0, vjust = 1)
+pl_combi <- annotate_figure(pl_combi, 
+  bottom = text_grob("note: groups with < 5 observations are omitted", 
+    hjust = 0, x = unit(5.5, "pt"), y = unit(55, "pt")))
 ggsave(here("report", "weight_change.png"), dpi = "print", height = 25, 
   width = 30, units = "cm")
 ggsave(here("report", "weight_change.pdf"), dpi = "print", height = 25, 
   width = 30, units = "cm")
+rm(list = ls(pattern = "^pl"))
 
+
+# -----------------------------------------------------------------------------
+# Visualise BMI category share pre-war and at first observation - full version
+# -----------------------------------------------------------------------------
+
+# Data for this plot
+df_fig <- df_tab
+
+# Convert dataset so that the pre-war, two periods (month_entry) 
+    # and all periods combined are stacked on top of each other
+df_fig$period <- df_fig$month_entry
+x <- df_fig
+x$period <- "Overall"
+df_fig <- rbind(df_fig, x)
+x <- df_fig
+x$period <- "Pre-war"
+df_fig <- rbind(df_fig, x)
+df_fig$period <- factor(df_fig$period, 
+  levels = c("Pre-war", "Aug-Sep 2025", "Oct-Nov 2025", "Overall"))
+
+# Select BMI category for different periods
+df_fig$bmi_category_fig <- ifelse(df_fig$period == "Pre-war", 
+  df_fig$bmi_category_prewar, df_fig$bmi_category_entry)
+df_fig$bmi_category_fig <- tolower(df_fig$bmi_category_fig)
+df_fig$bmi_category_fig <- factor(df_fig$bmi_category_fig, 
+  levels = c("obese", "overweight", "normal", "underweight"),
+  labels = c("obese (>= 30.0)", "overweight (25.0 to 29.9)", 
+    "normal (18.5 to 24.9)", "underweight (< 18.5)"))
+table(df_fig$bmi_category_fig, useNA = "always")
+
+# Remove two missing BMI values
+df_fig <- df_fig[complete.cases(df_fig$bmi_category_fig), ]
+
+# Variables of interest
+vars <- c("age_cat", "sex", "governorate", "role_cat", 
+  "children", "chronic_condition_cat")
+names(vars) <- c("age", "sex", 
+  "governorate of residence", "professional role", 
+  "number of dependent children", "living with a chronic condition")
+
+# Produce bar charts for each variable, by period and overall
+for (i in vars) {
+  
+  # data for this plot
+  df_i <- df_fig
+  
+  # variable
+  df_i$var_i <- df_i[, i]
+  
+  # eliminate missing
+  df_i <- subset(df_i, var_i != "missing")
+  
+  # labels with sample size
+  df_i$n <- 1
+  labs <- aggregate(n~var_i + period, data = df_i, FUN = sum)
+
+  # eliminate from the graph groups with n < 20
+  for (j in 1:nrow(labs)) {
+    if (labs[j, "n"] < 20) {
+      x <- which(df_i$var_i == labs[j, "var_i"] & 
+          df_i$period == labs[j, "period"])
+      df_i <- df_i[-x, ]
+    }
+  }
+  
+  # plot
+  pl <- ggplot(data = df_i, aes(x = period, fill = bmi_category_fig)) +
+    geom_bar(position = "fill") +
+    scale_y_continuous("percent in each BMI category", labels = percent,
+      expand = expansion(add = c(0, 0.05))) +
+    scale_x_discrete("") +
+    lshtm_theme() +
+    scale_fill_manual("", values = lshtm_palette$bmi_categories) +
+    geom_hline(yintercept = 0, colour = "grey70", linetype = "21") +
+    facet_grid(.~var_i) +
+    theme(legend.position = "bottom", axis.text.x = element_text(angle = 30,
+      hjust = 1, vjust = 1), plot.margin = margin(20,10,20,10))
+  
+  # assign plot name
+  assign(paste0("pl_", i), pl)
+}
+
+# Produce combination plot
+x <- grep("pl_", ls(), value = T)
+x <- x[x!= "pl_combi"]
+pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)), 
+  ncol = 2, nrow = 3, common.legend = T, align = "v", legend = "bottom",
+  hjust = 0, vjust = 1)
+pl_combi <- annotate_figure(pl_combi, 
+  bottom = text_grob("note: groups with < 20 observations are omitted", 
+    hjust = 0, x = unit(5.5, "pt"), y = unit(60, "pt")))
+ggsave(here("report", "bmi_cat_change.png"), dpi = "print", height = 25, 
+  width = 30, units = "cm")
+ggsave(here("report", "bmi_cat_change.pdf"), dpi = "print", height = 25, 
+  width = 30, units = "cm")
+rm(list = ls(pattern = "^pl"))
+
+
+# -----------------------------------------------------------------------------
+# Visualise BMI category share pre-war and at first observation - short version
+# -----------------------------------------------------------------------------
+
+# Data for this plot
+df_fig <- df_tab
+
+# Convert dataset so that the pre-war, two periods (month_entry) 
+    # and all periods combined are stacked on top of each other
+df_fig$period <- df_fig$month_entry
+x <- df_fig
+x$period <- "Overall"
+df_fig <- rbind(df_fig, x)
+x <- df_fig
+x$period <- "Pre-war"
+df_fig <- rbind(df_fig, x)
+df_fig$period <- factor(df_fig$period, 
+  levels = c("Pre-war", "Aug-Sep 2025", "Oct-Nov 2025", "Overall"))
+
+# Select BMI category for different periods
+df_fig$bmi_category_fig <- ifelse(df_fig$period == "Pre-war", 
+  df_fig$bmi_category_prewar, df_fig$bmi_category_entry)
+df_fig$bmi_category_fig <- tolower(df_fig$bmi_category_fig)
+df_fig$bmi_category_fig <- factor(df_fig$bmi_category_fig, 
+  levels = c("obese", "overweight", "normal", "underweight"),
+  labels = c("obese (>= 30.0)", "overweight (25.0 to 29.9)", 
+    "normal (18.5 to 24.9)", "underweight (< 18.5)"))
+table(df_fig$bmi_category_fig, useNA = "always")
+
+# Remove two missing BMI values
+df_fig <- df_fig[complete.cases(df_fig$bmi_category_fig), ]
+
+# Variables of interest
+vars <- c("sex", "governorate")
+names(vars) <- c("sex", "governorate of residence")
+
+# Produce bar charts for each variable, by period and overall
+for (i in vars) {
+  
+  # data for this plot
+  df_i <- df_fig
+  
+  # variable
+  df_i$var_i <- df_i[, i]
+  
+  # eliminate missing
+  df_i <- subset(df_i, var_i != "missing")
+  
+  # labels with sample size
+  df_i$n <- 1
+  labs <- aggregate(n~var_i + period, data = df_i, FUN = sum)
+
+  # eliminate from the graph groups with n < 20
+  for (j in 1:nrow(labs)) {
+    if (labs[j, "n"] < 20) {
+      x <- which(df_i$var_i == labs[j, "var_i"] & 
+          df_i$period == labs[j, "period"])
+      df_i <- df_i[-x, ]
+    }
+  }
+  
+  # plot
+  pl <- ggplot(data = df_i, aes(x = period, fill = bmi_category_fig)) +
+    geom_bar(position = "fill") +
+    scale_y_continuous("percent in each BMI category", labels = percent,
+      expand = expansion(add = c(0, 0.05))) +
+    scale_x_discrete("") +
+    lshtm_theme() +
+    scale_fill_manual("", values = lshtm_palette$bmi_categories) +
+    geom_hline(yintercept = 0, colour = "grey70", linetype = "21") +
+    facet_grid(.~var_i) +
+    theme(legend.position = "bottom", axis.text.x = element_text(angle = 30,
+      hjust = 1, vjust = 1), plot.margin = margin(20,10,20,10))
+  
+  # assign plot name
+  assign(paste0("pl_", i), pl)
+}
+
+# Produce combination plot
+x <- grep("pl_", ls(), value = T)
+x <- x[x!= "pl_combi"]
+pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)), 
+  ncol = 1, nrow = 2, common.legend = T, align = "h", legend = "bottom",
+  hjust = 0, vjust = 1)
+pl_combi <- annotate_figure(pl_combi, 
+  bottom = text_grob("note: groups with < 20 observations are omitted", 
+    hjust = 0, x = unit(5.5, "pt"), y = unit(60, "pt")))
+ggsave(here("report", "bmi_cat_change_short.png"), dpi = "print", height = 25, 
+  width = 20, units = "cm")
+ggsave(here("report", "bmi_cat_change_short.pdf"), dpi = "print", height = 25, 
+  width = 20, units = "cm")
+rm(list = ls(pattern = "^pl"))
 
 
 # -----------------------------------------------------------------------------
 # Visualise participation over time
 # -----------------------------------------------------------------------------
 
+# Dataset for this figure
+df_fig <- df_main
+
 # Range of first observation
-range(df$date_entry)
+df_fig$date_entry <- as.Date(df_fig$date_entry)
+range(df_fig$date_entry)
+
+# Range of any observation
+df_fig$record_date <- as.Date(df_fig$record_date)
+range(df_fig$record_date)
+
+# Code observations into new and repeat
+df_fig$record_number_cat <- df_fig$record_number
+df_fig[which(df_fig$record_number_cat >= 3), "record_number_cat"] <- 
+  "third or more"
+df_fig[which(df_fig$record_number_cat == 1), "record_number_cat"] <- "first"
+df_fig[which(df_fig$record_number_cat == 2), "record_number_cat"] <- "second"
+df_fig$record_number_cat <- as.character(df_fig$record_number_cat)
+df_fig$record_number_cat <- factor(df_fig$record_number_cat, 
+  levels = c("first", "second", "third or more"))
+table(df_fig$record_number_cat, useNA = "always")
+
+# Histogram of record dates, by record number category
+pl <- ggplot(df_fig, aes(x = record_date, group = record_number_cat,
+  fill = record_number_cat)) +
+  geom_histogram(stat = "count", colour = "black") +
+  scale_x_date("observation date (2025)", breaks = "week", 
+    date_labels = "%d %b") +
+  scale_y_continuous("number of observations", expand = expansion(add=c(0,5))) +
+  scale_fill_manual("observation number", 
+    values = lshtm_palette$record_number_cat) +
+  lshtm_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+ggsave(here("report", "date_histogram.png"), dpi = "print", height = 12, 
+  width = 25, units = "cm")
+ggsave(here("report", "date_histogram.pdf"), dpi = "print", height = 12, 
+  width = 25, units = "cm")
+
+
+# -----------------------------------------------------------------------------
+# Analyse influence of different features on percent BMI change at 1st obs.
+# -----------------------------------------------------------------------------
+
+# Data for this analysis
+df_gbm <- df_tab
+
+# Create a numeric relative date variable
+df_gbm$date_entry <- as.Date(df_gbm$date_entry)
+df_gbm$day_entry <- df_gbm$date_entry - min(df_gbm$date_entry)
+df_gbm$day_entry <- as.numeric(df_gbm$day_entry)
+
+# Compute relative BMI change
+df_gbm$bmi_change <- (df_gbm$bmi_entry - df_gbm$bmi_prewar) / df_gbm$bmi_entry
+
+# Select features
+vars <- c("bmi_prewar", "day_entry", "sex", "age_years", 
+  "governorate", "role_cat", "children")
+
+# Reduce dataset to complete observations
+df_gbm <- df_gbm[, c("bmi_change", vars)]
+for (i in vars) {df_gbm <- df_gbm[which(df_gbm[, i] != "missing"), ]}
+for (i in c("sex", "governorate", "role_cat", "children")) {
+  df_gbm[, i] <- as.numeric(df_gbm[, i])
+}
+df_gbm <- na.omit(df_gbm)
+
+# Identify optimal combination of shrinkage parameter and number of trees
+fm <- as.formula(paste0("bmi_change ~", paste(vars, collapse = "+")))
+caretGrid <- expand.grid(interaction.depth = c(1, 3, 5), n.trees = (0:50)*50,
+  shrinkage = c(0.1, 0.05, 0.01, 0.005, 0.001), n.minobsinnode = c(5, 10, 20))
+x <- caret::train(fm, data = df_gbm, distribution = "gaussian", method = "gbm",
+  metric = "RMSE", trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = caretGrid, verbose = F)
+print(x)
+
+# Fit gradient-boosted model
+m_try <- gbm(fm, data = df_gbm, n.trees = 2500, interaction.depth = 1,
+  shrinkage = 0.1, n.minobsinnode = 5)
+summary(m_try)
+
+# Visualise predictions vs observations
+df_gbm$predicted <- predict(m_try)
+x <- range(c(df_gbm$predicted, df_gbm$bmi_change))
+ggplot(df_gbm, aes(x = bmi_change, y = predicted)) +
+  geom_point(fill = lshtm_palette$lshtm_generic, alpha = 0.75) +
+  scale_x_continuous("observed BMI change", labels = percent, limits = x) +
+  scale_y_continuous("predicted BMI change", labels = percent, limits = x) +
+  lshtm_theme() +
+  geom_abline(slope = 1)
+
+# Collect influence statistics
+x <- summary(m_try)
+colnames(x) <- c("pred", "importance")
+x$pred <- gsub("_num", "", x$pred)
+x$importance <- x$importance/max(x$importance)
+x <- x[order(-x$importance), ]
 
 
 
+# -----------------------------------------------------------------------------
+# Model BMI change over time among people with >= 2 observations
+# -----------------------------------------------------------------------------
+
+# Dataset for this figure
+df_gam <- df_main
+
+# Restrict data to children with >= 2 observations
+x <- subset(df_gam, record_number != 1)
+x <- unique(x$id)
+df_gam <- df_gam[which(df_gam$id %in% x), ]
+
+# Create time variable
+df_gam$record_date <- as.Date(df_gam$record_date)
+df_gam$day <- as.integer(df_gam$record_date)
+
+# Create baseline BMI normalised score
+df_gam$bmi_entry_sc <- df_gam$bmi_entry / max(df_gam$bmi_entry) 
+
+# Check BMI distribution and transform if needed
+ggplot(df_gam, aes(x = bmi)) +
+  geom_density()
+df_gam$bmi_log <- log(df_gam$bmi)
+
+# Categorise age
+df_gam$age_cat <- "missing"
+df_gam[which(df_gam$age_years < 30), "age_cat"] <- "< 30y"
+df_gam[which(df_gam$age_years %in% 30:44), "age_cat"] <- "30 to 44y"
+df_gam[which(df_gam$age_years >= 45), "age_cat"] <- ">= 45y"
+df_gam$age_cat <- factor(df_gam$age_cat, 
+  levels = c("< 30y", "30 to 44y", ">= 45y"))
+
+# Combine governorates
+df_gam$governorate_cat <- df_gam$governorate
+df_gam[which(df_gam$governorate_cat %in% c("Gaza City", "North Gaza")), 
+  "governorate_cat"] <- "Gaza City, North Gaza"
+df_gam[which(df_gam$governorate_cat %in% c("Khan Yunis", "Rafah")), 
+  "governorate_cat"] <- "Khan Yunis, Rafah"
+table(df_gam$governorate_cat, useNA = "always")
+df_gam$governorate_cat <- factor(df_gam$governorate_cat, 
+  levels = c("Gaza City, North Gaza", "Khan Yunis, Rafah", "Deir Al Balah"))
+
+# Factorise other variables
+df_gam$sex <- factor(df_gam$sex, levels = c("Female", "Male"))
+df_gam$children <- factor(df_gam$children, levels = c("0", "1", "2", "3+"))
+
+# Fit generalised additive growth model
+m_try <- mgcv::gam(bmi_log ~ s(day, bs = "bs") + bmi_category_prewar + 
+  age_years + sex + governorate_cat + children + s(id, bs = "re"), 
+  data = df_gam, 
+  family = "gaussian")
+summary(m_try)
+mgcv::gam.check(m_try)
+
+# Predict values
+pred_frame <- unique(df_gam[, c("bmi_category_prewar", "age_years", "sex", 
+  "governorate_cat", "children", "id", "age_cat")])
+pred_frame <- merge(data.frame(day = min(df_gam$day):max(df_gam$day)),
+  pred_frame)
+
+x <- predict(m_try, se.fit = T, newdata = pred_frame)
+pred_frame$pred <- exp(x[[1]])
+pred_frame$pred_lci <- exp(x[[1]] - 1.96*x[[2]])
+pred_frame$pred_uci <- exp(x[[1]] + 1.96*x[[2]])
+pred_frame$date <- as.Date(pred_frame$day)
+
+# Compute median and 80% centiles of predictions
+centiles <- aggregate(pred ~ date, data = pred_frame, 
+  FUN = function(xx) {quantile(xx, c(0.50, 0.10, 0.90))})
+centiles[, 2:4] <- unlist(centiles[, 2])
+colnames(centiles) <- c("date", "median", "centile_10", "centile_90")
+
+# Plot data and model predictions
+pl <- ggplot() +
+  geom_line(data = df_gam, aes(x = record_date, y = bmi, group = id),
+    linetype = "11", colour = "grey30") +
+  geom_point(data = df_gam, aes(x = record_date, y = bmi, group = id), 
+    shape = 22, colour = "grey30") +
+  lshtm_theme() +
+  scale_x_date("date (2025)", breaks = "week", date_labels = "%d %b") +
+  scale_y_continuous("Body Mass Index") +
+  geom_line(data = centiles, aes(x = date, y = median), linewidth = 1,
+    colour = lshtm_palette$lshtm_generic, linetype = "31") +
+  geom_ribbon(data = centiles, aes(x = date, ymin = centile_10, 
+    ymax = centile_90), alpha = 0.20, outline.type = "both",
+    fill = lshtm_palette$lshtm_generic, colour = lshtm_palette$lshtm_generic) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+  
+# Plot by variable of interest
+vars <- c("age_cat", "sex", "governorate_cat", "children")
+vars_labs <- c("age", "sex", "governorate", "number of children dependents")
+for (i in vars) {
+
+  # assign variable
+  df_gam$var_i <- df_gam[, i]
+  pred_frame$var_i <- pred_frame[, i]
+  
+  # compute median and 80% centiles of predictions, by variable
+  centiles_i <- aggregate(pred ~ var_i + date, data = pred_frame, 
+    FUN = function(xx) {quantile(xx, c(0.50, 0.10, 0.90))})
+  centiles_i[, 3:5] <- unlist(centiles_i[, 3])
+  colnames(centiles_i) <- c("var_i", "date", "median", "centile_10", 
+    "centile_90")
+  
+  # Plot data and model predictions
+  pl_i <- ggplot() +
+    geom_line(data = df_gam, aes(x = record_date, y = bmi, group = id,
+      colour = var_i), linetype = "11") +
+    geom_point(data = df_gam, aes(x = record_date, y = bmi, group = id,
+      colour = var_i), shape = 22) +
+    lshtm_theme() +
+    scale_x_date("date (2025)", breaks = "month", date_labels = "%b") +
+    scale_y_continuous("Body Mass Index") +
+    geom_line(data = centiles_i, aes(x = date, y = median, colour = var_i), 
+      linewidth = 1, linetype = "31") +
+    geom_ribbon(data = centiles_i, aes(x = date, ymin = centile_10, 
+      ymax = centile_90, colour = var_i, fill = var_i), alpha = 0.20, 
+      outline.type = "both") +
+    scale_colour_manual(i, values = other_palette) +
+    scale_fill_manual(i, values = other_palette) +
+    facet_wrap(.~var_i, nrow = 1) +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+      legend.position = "none", plot.margin = margin(20,10,20,10))
+  
+  # assign plot name
+  assign(paste0("pl_", i), pl_i)
+}
+
+# Produce combination plot
+pl_list <- sapply(paste0("pl_", vars), get)
+pl_combi <- ggarrange(plotlist = pl_list, ncol = 2, nrow = 2, 
+  labels = vars_labs, hjust = 0)
+ggsave(here("report", "bmi_evolution.png"), dpi = "print", height = 20, 
+  width = 30, units = "cm")
+ggsave(here("report", "bmi_evolution.pdf"), dpi = "print", height = 20, 
+  width = 30, units = "cm")
+
+
+# -----------------------------------------------------------------------------
+# Assess selection bias
+# -----------------------------------------------------------------------------
