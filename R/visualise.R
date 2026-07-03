@@ -550,65 +550,65 @@ ggsave(here("report", "date_histogram.pdf"), dpi = "print", height = 12,
   width = 25, units = "cm")
 
 
-# -----------------------------------------------------------------------------
-# Analyse influence of different features on percent BMI change at 1st obs.
-# -----------------------------------------------------------------------------
-
-# Data for this analysis
-df_gbm <- df_tab
-
-# Create a numeric relative date variable
-df_gbm$date_entry <- as.Date(df_gbm$date_entry)
-df_gbm$day_entry <- df_gbm$date_entry - min(df_gbm$date_entry)
-df_gbm$day_entry <- as.numeric(df_gbm$day_entry)
-
-# Compute relative BMI change
-df_gbm$bmi_change <- (df_gbm$bmi_entry - df_gbm$bmi_prewar) / df_gbm$bmi_entry
-
-# Select features
-vars <- c("bmi_prewar", "day_entry", "sex", "age_years", 
-  "governorate", "role_cat", "children")
-
-# Reduce dataset to complete observations
-df_gbm <- df_gbm[, c("bmi_change", vars)]
-for (i in vars) {df_gbm <- df_gbm[which(df_gbm[, i] != "missing"), ]}
-for (i in c("sex", "governorate", "role_cat", "children")) {
-  df_gbm[, i] <- as.numeric(df_gbm[, i])
-}
-df_gbm <- na.omit(df_gbm)
-
-# Identify optimal combination of shrinkage parameter and number of trees
-fm <- as.formula(paste0("bmi_change ~", paste(vars, collapse = "+")))
-caretGrid <- expand.grid(interaction.depth = c(1, 3, 5), n.trees = (0:50)*50,
-  shrinkage = c(0.1, 0.05, 0.01, 0.005, 0.001), n.minobsinnode = c(5, 10, 20))
-x <- caret::train(fm, data = df_gbm, distribution = "gaussian", method = "gbm",
-  metric = "RMSE", trControl = trainControl(method = "cv", number = 5),
-  tuneGrid = caretGrid, verbose = F)
-print(x)
-
-# Fit gradient-boosted model
-m_try <- gbm(fm, data = df_gbm, n.trees = 2500, interaction.depth = 1,
-  shrinkage = 0.1, n.minobsinnode = 5)
-summary(m_try)
-
-# Visualise predictions vs observations
-df_gbm$predicted <- predict(m_try)
-x <- range(c(df_gbm$predicted, df_gbm$bmi_change))
-ggplot(df_gbm, aes(x = bmi_change, y = predicted)) +
-  geom_point(fill = lshtm_palette$lshtm_generic, alpha = 0.75) +
-  scale_x_continuous("observed BMI change", labels = percent, limits = x) +
-  scale_y_continuous("predicted BMI change", labels = percent, limits = x) +
-  lshtm_theme() +
-  geom_abline(slope = 1)
-
-# Collect influence statistics
-x <- summary(m_try)
-colnames(x) <- c("pred", "importance")
-x$pred <- gsub("_num", "", x$pred)
-x$importance <- x$importance/max(x$importance)
-x <- x[order(-x$importance), ]
-
-
+# # -----------------------------------------------------------------------------
+# # Analyse influence of different features on percent BMI change at 1st obs.
+# # -----------------------------------------------------------------------------
+# 
+# # Data for this analysis
+# df_gbm <- df_tab
+# 
+# # Create a numeric relative date variable
+# df_gbm$date_entry <- as.Date(df_gbm$date_entry)
+# df_gbm$day_entry <- df_gbm$date_entry - min(df_gbm$date_entry)
+# df_gbm$day_entry <- as.numeric(df_gbm$day_entry)
+# 
+# # Compute relative BMI change
+# df_gbm$bmi_change <- (df_gbm$bmi_entry - df_gbm$bmi_prewar) / df_gbm$bmi_entry
+# 
+# # Select features
+# vars <- c("bmi_prewar", "day_entry", "sex", "age_years", 
+#   "governorate", "role_cat", "children")
+# 
+# # Reduce dataset to complete observations
+# df_gbm <- df_gbm[, c("bmi_change", vars)]
+# for (i in vars) {df_gbm <- df_gbm[which(df_gbm[, i] != "missing"), ]}
+# for (i in c("sex", "governorate", "role_cat", "children")) {
+#   df_gbm[, i] <- as.numeric(df_gbm[, i])
+# }
+# df_gbm <- na.omit(df_gbm)
+# 
+# # Identify optimal combination of shrinkage parameter and number of trees
+# fm <- as.formula(paste0("bmi_change ~", paste(vars, collapse = "+")))
+# caretGrid <- expand.grid(interaction.depth = c(1, 3, 5), n.trees = (0:50)*50,
+#   shrinkage = c(0.1, 0.05, 0.01, 0.005, 0.001), n.minobsinnode = c(5, 10, 20))
+# x <- caret::train(fm, data = df_gbm, distribution = "gaussian", method = "gbm",
+#   metric = "RMSE", trControl = trainControl(method = "cv", number = 5),
+#   tuneGrid = caretGrid, verbose = F)
+# print(x)
+# 
+# # Fit gradient-boosted model
+# m_try <- gbm(fm, data = df_gbm, n.trees = 500, interaction.depth = 1,
+#   shrinkage = 0.01, n.minobsinnode = 20)
+# summary(m_try)
+# 
+# # Visualise predictions vs observations
+# df_gbm$predicted <- predict(m_try)
+# x <- range(c(df_gbm$predicted, df_gbm$bmi_change))
+# ggplot(df_gbm, aes(x = bmi_change, y = predicted)) +
+#   geom_point(fill = lshtm_palette$lshtm_generic, alpha = 0.75) +
+#   scale_x_continuous("observed BMI change", labels = percent, limits = x) +
+#   scale_y_continuous("predicted BMI change", labels = percent, limits = x) +
+#   lshtm_theme() +
+#   geom_abline(slope = 1)
+# 
+# # Collect influence statistics
+# x <- summary(m_try)
+# colnames(x) <- c("pred", "importance")
+# x$pred <- gsub("_num", "", x$pred)
+# x$importance <- x$importance/max(x$importance)
+# x <- x[order(-x$importance), ]
+# 
+# 
 
 # -----------------------------------------------------------------------------
 # Model BMI change over time among people with >= 2 observations
@@ -618,7 +618,7 @@ x <- x[order(-x$importance), ]
 df_gam <- df_main
 
 # Restrict data to children with >= 2 observations
-x <- subset(df_gam, record_number != 1)
+x <- subset(df_gam, ! record_number %in% c(1, 2))
 x <- unique(x$id)
 df_gam <- df_gam[which(df_gam$id %in% x), ]
 
@@ -657,15 +657,14 @@ df_gam$sex <- factor(df_gam$sex, levels = c("Female", "Male"))
 df_gam$children <- factor(df_gam$children, levels = c("0", "1", "2", "3+"))
 
 # Fit generalised additive growth model
-m_try <- mgcv::gam(bmi_log ~ s(day, bs = "bs") + bmi_category_prewar + 
-  age_years + sex + governorate_cat + children + s(id, bs = "re"), 
-  data = df_gam, 
-  family = "gaussian")
+m_try <- mgcv::gam(bmi_log ~ s(day, bs = "bs") + s(bmi_prewar, bs = "bs") + 
+  s(age_years, bs = "bs") + sex + governorate_cat + children + s(id, bs = "re"), 
+  data = df_gam, family = "gaussian")
 summary(m_try)
 mgcv::gam.check(m_try)
 
 # Predict values
-pred_frame <- unique(df_gam[, c("bmi_category_prewar", "age_years", "sex", 
+pred_frame <- unique(df_gam[, c("bmi_prewar", "age_years", "sex", 
   "governorate_cat", "children", "id", "age_cat")])
 pred_frame <- merge(data.frame(day = min(df_gam$day):max(df_gam$day)),
   pred_frame)
@@ -747,6 +746,12 @@ ggsave(here("report", "bmi_evolution.png"), dpi = "print", height = 20,
 ggsave(here("report", "bmi_evolution.pdf"), dpi = "print", height = 20, 
   width = 30, units = "cm")
 
+for (i in unique(x$var_i)){
+  print(i)
+  slope_i <- (max(x[x$var_i==i, "median"]) - min(x[x$var_i==i, "median"])) /
+    min(x[x$var_i==i, "median"])
+  print(slope_i)
+}
 
 # -----------------------------------------------------------------------------
 # Assess selection bias
