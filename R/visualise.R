@@ -9,7 +9,7 @@
 
 set.seed(20260612)
 pacman::p_load(caret, flextable, gbm, ggpubr, ggplot2, here, mgcv, scales, 
-  tidyverse, viridis)
+  tidyverse)
 
 # Read in processed data
 data_processed <- read.csv(here::here("data", "processed", "participants.csv"))
@@ -618,7 +618,7 @@ ggsave(here("report", "date_histogram.pdf"), dpi = "print", height = 12,
 df_gam <- df_main
 
 # Restrict data to children with >= 2 observations
-x <- subset(df_gam, ! record_number %in% c(1, 2))
+x <- subset(df_gam, ! record_number %in% 1)
 x <- unique(x$id)
 df_gam <- df_gam[which(df_gam$id %in% x), ]
 
@@ -656,10 +656,43 @@ df_gam$governorate_cat <- factor(df_gam$governorate_cat,
 df_gam$sex <- factor(df_gam$sex, levels = c("Female", "Male"))
 df_gam$children <- factor(df_gam$children, levels = c("0", "1", "2", "3+"))
 
-# Fit generalised additive growth model
+# Compute daily change between sequential observations
+df_gam <- df_gam[order(df_gam$id, df_gam$record_number), ]
+df_gam$id <- factor(df_gam$id)
+x <- by(df_gam[, c("id", "bmi", "record_date", "record_number")], df_gam$id, 
+  function(xx) {data.frame(
+    id = xx[, "id"],
+    record_number = xx[, "record_number"],
+    bmi_diff = c(NA, diff(xx[, "bmi"])), 
+    date_diff = c(NA, diff(xx[, "record_date"]))
+  )  
+  }
+)
+df_diff <- do.call(rbind, x)
+df_diff$bmi_daily_change <- df_diff$bmi_diff / df_diff$date_diff
+
+# Plot absolute daily change
+pl <- ggplot(df_diff, aes(x = abs(bmi_daily_change))) +
+  geom_histogram(fill = lshtm_palette$lshtm_generic, alpha = 0.75, 
+    colour = "black") +
+  scale_x_continuous("absolute daily change in BMI") +
+  scale_y_continuous("number of sequential observations") +
+  lshtm_theme()
+ggsave(here("report", "bmi_daily_change.png"), dpi = "print", height = 10, 
+  width = 15, units = "cm")
+ggsave(here("report", "bmi_daily_change.pdf"), dpi = "print", height = 10, 
+  width = 15, units = "cm")
+
+
+# Eliminate participants with an implausible daily change between observations
+    # adopt an absolute cutoff of 1.0
+x <- subset(df_diff, abs(bmi_daily_change) >= 1)
+x <- unique(x$id)
+df_gam <- subset(df_gam, ! id %in% x)
+
+# Fit generalised additive growth model, just to check that it fits well
 m_try <- mgcv::gam(bmi_log ~ s(day, bs = "bs") + s(bmi_prewar, bs = "bs") + 
-  s(age_years, bs = "bs") + sex + governorate_cat + children + s(id, bs = "re"), 
-  data = df_gam, family = "gaussian")
+  s(id, bs = "re"), data = df_gam, family = "gaussian")
 summary(m_try)
 mgcv::gam.check(m_try)
 
@@ -696,8 +729,12 @@ pl <- ggplot() +
     ymax = centile_90), alpha = 0.20, outline.type = "both",
     fill = lshtm_palette$lshtm_generic, colour = lshtm_palette$lshtm_generic) +
   theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
-  
-# Plot by variable of interest
+ggsave(here("report", "bmi_evolution_overall.png"), dpi = "print", height = 15, 
+  width = 20, units = "cm")
+ggsave(here("report", "bmi_evolution_overall.pdf"), dpi = "print", height = 15, 
+  width = 20, units = "cm")
+
+# Model and plot by variable of interest
 vars <- c("age_cat", "sex", "governorate_cat", "children")
 vars_labs <- c("age", "sex", "governorate", "number of children dependents")
 for (i in vars) {
@@ -705,17 +742,32 @@ for (i in vars) {
   # assign variable
   df_gam$var_i <- df_gam[, i]
   pred_frame$var_i <- pred_frame[, i]
+
+  # fit growth model and predict for each stratum/category
+  pred_frame <- pred_frame[order(pred_frame$var_i), ]
+  for (j in levels(df_gam$var_i)) {
+    m_j <- mgcv::gam(bmi_log ~ s(day, bs = "tp") + s(bmi_prewar, bs = "tp") + 
+      s(id, bs = "re"), data = subset(df_gam, var_i == j), family = "gaussian")
+    pred_frame[which(pred_frame$var_i == j), "pred"] <- exp(predict(m_j, 
+      newdata = pred_frame[which(pred_frame$var_i == j), ]))
+  }
   
-  # compute median and 80% centiles of predictions, by variable
+  # compute median and 80% centiles of predictions over data span
   centiles_i <- aggregate(pred ~ var_i + date, data = pred_frame, 
     FUN = function(xx) {quantile(xx, c(0.50, 0.10, 0.90))})
   centiles_i[, 3:5] <- unlist(centiles_i[, 3])
   colnames(centiles_i) <- c("var_i", "date", "median", "centile_10", 
     "centile_90")
+  for (j in levels(df_gam$var_i)) {
+    x <- df_gam[which(df_gam$var_i == j), "record_date"]
+    centiles_i[which(centiles_i$var_i == j & (centiles_i$date < min(x) |
+        centiles_i$date > max(x))), c("median", "centile_10", "centile_90")] <- 
+      NA
+  }  
   
-  # Plot data and model predictions
+  # plot data and model predictions
   pl_i <- ggplot() +
-    geom_line(data = df_gam, aes(x = record_date, y = bmi, group = id,
+    geom_line(data = df_gam, aes(x = record_date, y = bmi, group = id, 
       colour = var_i), linetype = "11") +
     geom_point(data = df_gam, aes(x = record_date, y = bmi, group = id,
       colour = var_i), shape = 22) +
@@ -741,18 +793,102 @@ for (i in vars) {
 pl_list <- sapply(paste0("pl_", vars), get)
 pl_combi <- ggarrange(plotlist = pl_list, ncol = 2, nrow = 2, 
   labels = vars_labs, hjust = 0)
-ggsave(here("report", "bmi_evolution.png"), dpi = "print", height = 20, 
-  width = 30, units = "cm")
-ggsave(here("report", "bmi_evolution.pdf"), dpi = "print", height = 20, 
-  width = 30, units = "cm")
+ggsave(here("report", "bmi_evolution_by_factor.png"), dpi = "print", 
+  height = 20, width = 30, units = "cm")
+ggsave(here("report", "bmi_evolution_by_factor.pdf"), dpi = "print", 
+  height = 20, width = 30, units = "cm")
 
-for (i in unique(x$var_i)){
-  print(i)
-  slope_i <- (max(x[x$var_i==i, "median"]) - min(x[x$var_i==i, "median"])) /
-    min(x[x$var_i==i, "median"])
-  print(slope_i)
+
+# -----------------------------------------------------------------------------
+# Assess selection bias: compare participants with 1 versus >= 2 observations
+# -----------------------------------------------------------------------------
+
+# Prepare output table
+vars <- c("n_obs", "age_cat", "sex", "bmi_prewar", "bmi_entry")
+names(vars) <- c("number of observations", "age", "sex", "BMI pre-war", 
+  "BMI at first observation")
+tab2 <- matrix(NA, nrow = 12, ncol = 4)
+tab2 <- as.data.frame(tab2)
+colnames(tab2) <- c("Variable", "Participants with a single observation", 
+  "Participants with >= 2 observations", "p-value")
+tab2$Variable <- c("number of observations", "age", 
+  paste0("  ", levels(df_tab$age_cat)), "sex", paste0("  ", levels(df_tab$sex)),
+  "mean BMI pre-war", "mean BMI at first observation")
+
+# Classify participants in terms of whether they have >= 2 observations
+df_tab$type <- ifelse(df_tab$n_obs_cat == "1", "single observation",
+  "multiple observations")
+df_tab$type <- factor(df_tab$type, levels = c("single observation",
+  "multiple observations"))
+table(df_tab$type, useNA = "always")
+
+# Fill in table
+tab2[1, 2:3] <- table(df_tab$type)
+tab2[3:6, 2:3] <- table(df_tab$age_cat, df_tab$type)
+x <- stats::chisq.test(df_tab$age_cat, df_tab$type)
+tab2[2, 4] <- x$p.value
+tab2[8:10, 2:3] <- table(df_tab$sex, df_tab$type)
+x <- stats::chisq.test(df_tab$sex, df_tab$type)
+tab2[7, 4] <- x$p.value
+tab2[11, 2:3] <- as.vector(by(df_tab$bmi_prewar, df_tab$type, 
+  function(xx) {mean(xx, na.rm = T)}))
+x <- stats::t.test(
+  df_tab[which(df_tab$type == "single observation"), "bmi_prewar"],
+  df_tab[which(df_tab$type == "multiple observations"), "bmi_prewar"]
+)
+tab2[11, 4] <- x$p.value
+tab2[12, 2:3] <- as.vector(by(df_tab$bmi_entry, df_tab$type, 
+  function(xx) {mean(xx, na.rm = T)}))
+x <- stats::t.test(
+  df_tab[which(df_tab$type == "single observation"), "bmi_entry"],
+  df_tab[which(df_tab$type == "multiple observations"), "bmi_entry"]
+)
+tab2[12, 4] <- x$p.value
+
+# Format and save table
+tab2[11:12, 2:3] <- apply(tab2[11:12, 2:3], 2, round, 1)
+tab2[1:10, 2:3] <- formatC(apply(tab2[1:10, 2:3], 1, as.integer), digits = 0)
+tab2[, 4] <- formatC(round(tab2[, 4], 3), 3)
+write.csv(tab2, here("report", "tab2.csv"), row.names = F)
+x <- flextable(tab2)
+flextable::save_as_docx(x, path = here("report", "tab2.docx"))
+
+  
+# -----------------------------------------------------------------------------
+# Assess selection bias: compare participants with Hamad et al. 2020 survey
+# -----------------------------------------------------------------------------
+
+# Read aggregate dataset from 2020 Hamad et al. survey
+    # (https://doi.org/10.1038/s41371-022-00783-w)
+hamad <- read.csv(here("data", "raw", "gaza_survey2020_kcal_bmi_agg.csv"))
+
+# Estimate BMI for age groups 40-49 and 50-59 in Hamad survey, by sex
+hamad$bmi <- hamad$weight / hamad$height^2
+
+# Estimate BMI (pre-war) for the same groups in our sample
+df_tab$age_cat2 <- NA
+df_tab[which(df_tab$age_years >= 40 & df_tab$age_years < 50), "age_cat2"] <-
+  "40 to 49y"
+df_tab[which(df_tab$age_years >= 50 & df_tab$age_years < 60), "age_cat2"] <-
+  "50 to 59y"
+x <- aggregate(bmi_prewar ~ age_cat2 + sex, data = df_tab, FUN = mean)
+x <- x[order(x$age_cat2), ]
+
+# Comparison table
+tab3 <- data.frame(
+  age = c("40 to 49y", "40 to 49y", "50 to 59y", "50 to 59y"),
+  sex = c("female", "male", "female", "male"),
+  hamad = hamad[1:4, "bmi"],
+  this_sample = x$bmi_prewar
+)
+for (i in c("hamad","this_sample")) {
+  tab3[, i] <- round(tab3[, i], 1)
 }
-
-# -----------------------------------------------------------------------------
-# Assess selection bias
-# -----------------------------------------------------------------------------
+colnames(tab3) <- c("age", "sex", "mean BMI (Hamad et al., 2022)",
+  "mean pre-war BMI (this study)")
+write.csv(tab3, here("report", "tab3.csv"), row.names = F)
+x <- flextable(tab3)
+flextable::save_as_docx(x, path = here("report", "tab3.docx"))
+  
+  
+  
