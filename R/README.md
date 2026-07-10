@@ -2,12 +2,12 @@
 
 To prepare and analyse data:
 
-1. Save data into `data/raw`
+**1. Save data** into `data/raw`
 
 - `gaza_adult_weight_form1.csv`
 - `gaza_adult_weight_form2.csv`
 
-2. Prepare the data for analysis. To do this, run the `main.R` script in the `R` sub-folder, up to and including the following lines:
+**2. Prepare the data** for analysis. To do this, run the `main.R` script in the `R` sub-folder, up to and including the following lines:
 
 ```
 # Pre-process datasets
@@ -27,7 +27,7 @@ Invalid records are described in the `record_remove` field, and any modified val
   - Records passing all criteria are labelled `include`
 
 
-3. Analyse the data. To do this, run the following lines of the `main.R` script:
+**3. Analyse the data.** To do this, run the following lines of the `main.R` script:
 
 ```
 # Visualise data
