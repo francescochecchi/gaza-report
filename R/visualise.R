@@ -12,7 +12,7 @@ pacman::p_load(caret, flextable, gbm, ggpubr, ggplot2, here, mgcv, scales,
   tidyverse)
 
 # Read in processed data
-data_processed <- read.csv(here::here("data", "processed", "participants.csv"))
+data_processed <- read.csv(paste0(dir_path, "data/processed/participants.csv"))
 
 # Filter to valid records
 df_main <- data_processed[data_processed$record_remove == "include", ]
@@ -41,7 +41,7 @@ lshtm_theme <- function() {
     strip.text.x = element_text(colour = "white"),
     strip.text.y = element_text(colour = "white", angle = 270),
     strip.background = element_rect(
-      color="#01454f", fill="#01454f", size=1.5, linetype="solid"
+      color="#01454f", fill="#01454f", linewidth=1.5, linetype="solid"
     ),
     legend.position = "bottom",
     legend.title = element_text(colour = "#01454f", face = "bold"),
@@ -220,9 +220,9 @@ for (i in 1:length(vars)) {
 }
 
 # Write table
-write.csv(tab1, here("report", "tab1.csv"), row.names = F)
+write.csv(tab1, paste0(dir_path, "report/tab1.csv"), row.names = F)
 x <- flextable(tab1)
-flextable::save_as_docx(x, path = here("report", "tab1.docx"))
+flextable::save_as_docx(x, path = paste0(dir_path, "report/tab1.docx"))
 
 
 # -----------------------------------------------------------------------------
@@ -309,9 +309,9 @@ pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)),
 pl_combi <- annotate_figure(pl_combi, 
   bottom = text_grob("note: groups with < 5 observations are omitted", 
     hjust = 0, x = unit(5.5, "pt"), y = unit(55, "pt")))
-ggsave(here("report", "weight_change.png"), dpi = "print", height = 25, 
+ggsave(paste0(dir_path, "report/weight_change.png"), dpi = "print", height = 25, 
   width = 30, units = "cm")
-ggsave(here("report", "weight_change.pdf"), dpi = "print", height = 25, 
+ggsave(paste0(dir_path, "report/weight_change.pdf"), dpi = "print", height = 25, 
   width = 30, units = "cm")
 rm(list = ls(pattern = "^pl"))
 
@@ -406,10 +406,10 @@ pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)),
 pl_combi <- annotate_figure(pl_combi, 
   bottom = text_grob("note: groups with < 20 observations are omitted", 
     hjust = 0, x = unit(5.5, "pt"), y = unit(60, "pt")))
-ggsave(here("report", "bmi_cat_change.png"), dpi = "print", height = 25, 
-  width = 30, units = "cm")
-ggsave(here("report", "bmi_cat_change.pdf"), dpi = "print", height = 25, 
-  width = 30, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_cat_change.png"), dpi = "print", 
+  height = 25, width = 30, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_cat_change.pdf"), dpi = "print", 
+  height = 25, width = 30, units = "cm")
 rm(list = ls(pattern = "^pl"))
 
 
@@ -500,10 +500,10 @@ pl_combi <- ggarrange(plotlist = sapply(x, get), labels = names(sort(vars)),
 pl_combi <- annotate_figure(pl_combi, 
   bottom = text_grob("note: groups with < 20 observations are omitted", 
     hjust = 0, x = unit(5.5, "pt"), y = unit(60, "pt")))
-ggsave(here("report", "bmi_cat_change_short.png"), dpi = "print", height = 25, 
-  width = 20, units = "cm")
-ggsave(here("report", "bmi_cat_change_short.pdf"), dpi = "print", height = 25, 
-  width = 20, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_cat_change_short.png"), dpi = "print", 
+  height = 25, width = 20, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_cat_change_short.pdf"), dpi = "print", 
+  height = 25, width = 20, units = "cm")
 rm(list = ls(pattern = "^pl"))
 
 
@@ -544,10 +544,10 @@ pl <- ggplot(df_fig, aes(x = record_date, group = record_number_cat,
     values = lshtm_palette$record_number_cat) +
   lshtm_theme() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
-ggsave(here("report", "date_histogram.png"), dpi = "print", height = 12, 
-  width = 25, units = "cm")
-ggsave(here("report", "date_histogram.pdf"), dpi = "print", height = 12, 
-  width = 25, units = "cm")
+ggsave(paste0(dir_path, "report/date_histogram.png"), dpi = "print", 
+  height = 12, width = 25, units = "cm")
+ggsave(paste0(dir_path, "report/date_histogram.pdf"), dpi = "print", 
+  height = 12, width = 25, units = "cm")
 
 
 # # -----------------------------------------------------------------------------
@@ -678,10 +678,10 @@ pl <- ggplot(df_diff, aes(x = abs(bmi_daily_change))) +
   scale_x_continuous("absolute daily change in BMI") +
   scale_y_continuous("number of sequential observations") +
   lshtm_theme()
-ggsave(here("report", "bmi_daily_change.png"), dpi = "print", height = 10, 
-  width = 15, units = "cm")
-ggsave(here("report", "bmi_daily_change.pdf"), dpi = "print", height = 10, 
-  width = 15, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_daily_change.png"), dpi = "print", 
+  height = 10, width = 15, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_daily_change.pdf"), dpi = "print", 
+  height = 10, width = 15, units = "cm")
 
 
 # Eliminate participants with an implausible daily change between observations
@@ -729,10 +729,10 @@ pl <- ggplot() +
     ymax = centile_90), alpha = 0.20, outline.type = "both",
     fill = lshtm_palette$lshtm_generic, colour = lshtm_palette$lshtm_generic) +
   theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
-ggsave(here("report", "bmi_evolution_overall.png"), dpi = "print", height = 15, 
-  width = 20, units = "cm")
-ggsave(here("report", "bmi_evolution_overall.pdf"), dpi = "print", height = 15, 
-  width = 20, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_evolution_overall.png"), dpi = "print", 
+  height = 15, width = 20, units = "cm")
+ggsave(paste0(dir_path, "report/bmi_evolution_overall.pdf"), dpi = "print", 
+  height = 15, width = 20, units = "cm")
 
 # Model and plot by variable of interest
 vars <- c("age_cat", "sex", "governorate_cat", "children")
@@ -793,9 +793,9 @@ for (i in vars) {
 pl_list <- sapply(paste0("pl_", vars), get)
 pl_combi <- ggarrange(plotlist = pl_list, ncol = 2, nrow = 2, 
   labels = vars_labs, hjust = 0)
-ggsave(here("report", "bmi_evolution_by_factor.png"), dpi = "print", 
+ggsave(paste0(dir_path, "report/bmi_evolution_by_factor.png"), dpi = "print", 
   height = 20, width = 30, units = "cm")
-ggsave(here("report", "bmi_evolution_by_factor.pdf"), dpi = "print", 
+ggsave(paste0(dir_path, "report/bmi_evolution_by_factor.pdf"), dpi = "print", 
   height = 20, width = 30, units = "cm")
 
 
@@ -849,9 +849,9 @@ tab2[12, 4] <- x$p.value
 tab2[11:12, 2:3] <- apply(tab2[11:12, 2:3], 2, round, 1)
 tab2[1:10, 2:3] <- formatC(apply(tab2[1:10, 2:3], 1, as.integer), digits = 0)
 tab2[, 4] <- formatC(round(tab2[, 4], 3), 3)
-write.csv(tab2, here("report", "tab2.csv"), row.names = F)
+write.csv(tab2, paste0(dir_path, "report/tab2.csv"), row.names = F)
 x <- flextable(tab2)
-flextable::save_as_docx(x, path = here("report", "tab2.docx"))
+flextable::save_as_docx(x, path = paste0(dir_path, "report/tab2.docx"))
 
   
 # -----------------------------------------------------------------------------
@@ -860,7 +860,7 @@ flextable::save_as_docx(x, path = here("report", "tab2.docx"))
 
 # Read aggregate dataset from 2020 Hamad et al. survey
     # (https://doi.org/10.1038/s41371-022-00783-w)
-hamad <- read.csv(here("data", "raw", "gaza_survey2020_kcal_bmi_agg.csv"))
+hamad <- read.csv(paste0(dir_path, "data/raw/gaza_survey2020_kcal_bmi_agg.csv"))
 
 # Estimate BMI for age groups 40-49 and 50-59 in Hamad survey, by sex
 hamad$bmi <- hamad$weight / hamad$height^2
@@ -886,9 +886,9 @@ for (i in c("hamad","this_sample")) {
 }
 colnames(tab3) <- c("age", "sex", "mean BMI (Hamad et al., 2022)",
   "mean pre-war BMI (this study)")
-write.csv(tab3, here("report", "tab3.csv"), row.names = F)
+write.csv(tab3, paste0(dir_path, "report/tab3.csv"), row.names = F)
 x <- flextable(tab3)
-flextable::save_as_docx(x, path = here("report", "tab3.docx"))
+flextable::save_as_docx(x, path = paste0(dir_path, "report/tab3.docx"))
   
   
   
