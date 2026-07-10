@@ -18,7 +18,7 @@
 
 
 set.seed(20260612)
-pacman::p_load(here, readr, janitor, dplyr, tidyr, lubridate, forcats)
+pacman::p_load(readr, janitor, dplyr, tidyr, lubridate, forcats)
 
 
 
@@ -74,11 +74,11 @@ rename_cols <- c(
   "wt_3" = "weight_record"
 )
 
-form1_raw <- read_csv(here("data", "raw", "gaza_adult_weight_form1.csv"),
+form1_raw <- read_csv(paste0(dir_path, "data/raw/gaza_adult_weight_form1.csv"),
   show_col_types = FALSE
 ) |>
   clean_names(replace = rename_cols)
-form2_raw <- read_csv(here("data", "raw", "gaza_adult_weight_form2.csv"),
+form2_raw <- read_csv(paste0(dir_path, "data/raw/gaza_adult_weight_form2.csv"),
   show_col_types = FALSE
 ) |>
   clean_names(replace = rename_cols)
@@ -457,8 +457,8 @@ out <- data |>
   ) |>
   arrange(id, record_date)
 
-dir.create(here("data", "processed"), showWarnings = FALSE)
-write_csv(out, here("data", "processed", "participants.csv"))
+dir.create(paste0(dir_path, "data/processed"), showWarnings = FALSE)
+write_csv(out, paste0(dir_path, "data/processed/participants.csv"))
 
 # -----------------------------------------------------------------------------
 # 10. Documentation: data quality
@@ -517,7 +517,7 @@ quality <- out |>
     n_remaining, n_participants_remaining
   )
 
-write_csv(quality, here("data", "processed", "data-quality.csv"))
+write_csv(quality, paste0(dir_path, "data/processed/data-quality.csv"))
 
 message(sprintf(
   "Wrote %s rows, %s participants -> data/processed/participants.csv",
