@@ -1,21 +1,17 @@
 ### Quickstart
 
-To prepare and load data for analysis:
+To prepare and analyse data:
 
 1. Save data into `data/raw`
 
 - `gaza_adult_weight_form1.csv`
 - `gaza_adult_weight_form2.csv`
 
-2. Run:
+2. Prepare the data for analysis. To do this, run the `main.R` script in the `R` sub-folder, up to and including the following lines:
 
 ```
-# Process raw data
-source(here::here("R", "clean.R"))
-# Read in processed data
-data_processed <- read.csv(here::here("data", "processed", "participants.csv"))
-# Filter to valid records
-participants <- data_processed[data_processed$record_remove == "include", ]
+# Pre-process datasets
+source(paste0(dir_path, "R/clean.R"))
 ```
 
 Note that for completeness, the data processing step keeps all recorded measurements (with duplicates, unidentified, etc).
@@ -30,8 +26,16 @@ Invalid records are described in the `record_remove` field, and any modified val
   - Reasons for exclusion are flagged in the field `record_remove`
   - Records passing all criteria are labelled `include`
 
-Filter to `record_remove == "include"` to use only the valid records (a `r dim_desc(participants)` dataframe).
-Or selectively exclude using `record_remove` labels.
+
+3. Analyse the data. To do this, run the following lines of the `main.R` script:
+
+```
+# Visualise data
+source(paste0(dir_path, "R/visualise.R"))
+```
+
+This step will filter records to `record_remove == "include"` to use only the valid records (a `r dim_desc(participants)` dataframe).
+You can also selectively exclude using `record_remove` labels. To do this, modify the `visualise.R` script directly.
 
 To render this report locally, use `quarto::quarto_render(here::here("R", "cleaning.qmd"))`.
 Add interactivity to plots with `ggplotly(plot)`.
