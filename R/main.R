@@ -7,6 +7,9 @@
 # R script to call other scripts, clean data and generate analysis
 # =============================================================================
 
+# Clean up from previous code / runs
+rm(list=ls(all=TRUE) )
+
 # Set project directory
 dir_path <- paste(dirname(rstudioapi::getActiveDocumentContext()$path  )
   , "/", sep = "")

@@ -263,7 +263,8 @@ for (i in vars) {
   
   # eliminate missing
   df_i <- subset(df_i, var_i != "missing")
-  
+  df_i <- subset(df_i, !is.na(var_i))
+    
   # labels with sample size
   df_i$n <- 1
   labs <- aggregate(n~var_i + period, data = df_i, FUN = sum)
@@ -280,15 +281,16 @@ for (i in vars) {
  
   # plot
   pl <- ggplot(data = df_i, aes(y = weight_change, x = period, 
-    colour = period, fill = period)) +
+    colour = period, fill = period, alpha = period)) +
     geom_violin(linewidth = 1.0, trim = F, quantiles = 0.50,
-      alpha = 0.50, quantile.linetype = "11") +
+      quantile.linetype = "11") +
     scale_y_continuous("percent weight change", labels = percent,
       limits = c(-0.52, 0.32), breaks = seq(-0.50, 0.30, 0.10)) +
-    scale_x_discrete("period") +
+    scale_x_discrete("period", drop = F) +
     lshtm_theme() +
-    scale_colour_manual("period", values = lshtm_palette$period) +
-    scale_fill_manual("period", values = lshtm_palette$period) +
+    scale_colour_manual("period", values = lshtm_palette$period, drop = F) +
+    scale_fill_manual("period", values = lshtm_palette$period, drop = F) +
+    scale_alpha_manual("period", values = c(0.50, 0.50, 0.75), drop = F) +
     geom_hline(yintercept = 0, colour = "grey70", linetype = "21") +
     facet_grid(.~var_i) +
     geom_text(data = labs, aes(y = weight_change, x = period, label = n),
@@ -846,8 +848,9 @@ x <- stats::t.test(
 tab2[12, 4] <- x$p.value
 
 # Format and save table
-tab2[11:12, 2:3] <- apply(tab2[11:12, 2:3], 2, round, 1)
-tab2[1:10, 2:3] <- formatC(apply(tab2[1:10, 2:3], 1, as.integer), digits = 0)
+tab2[11:12, 2:3] <- apply(tab2[11:12, 2:3], c(1,2), round, 1)
+tab2[1:10, 2:3] <- formatC(apply(tab2[1:10, 2:3], c(1,2), as.integer), 
+  digits = 0)
 tab2[, 4] <- formatC(round(tab2[, 4], 3), 3)
 write.csv(tab2, paste0(dir_path, "report/tab2.csv"), row.names = F)
 x <- flextable(tab2)
